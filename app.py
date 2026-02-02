@@ -2,40 +2,37 @@ import streamlit as st
 import pandas as pd
 import collections
 import random
+import os
 
-# ページの設定
 st.set_page_config(page_title="LOTO6 予測くん", layout="centered")
-
 st.title("🎰 KAZUさんのLOTO6予測・分析アプリ")
 
-# --- 1. CSV読み込み機能 ---
-st.header("📂 1. 過去データの読み込み")
-uploaded_file = st.file_uploader("お手元の 'loto6.csv' ば選んでね", type="csv")
+# --- 自動読み込み機能 ---
+# GitHub上に一緒にアップロードした 'loto6.csv' ば探しに行くバイ
+csv_file = 'loto6.csv'
 
-if uploaded_file:
-    df = None
-    for enc in ['cp932', 'utf-8', 'utf-8-sig']:
-        try:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, encoding=enc)
-            if df is not None:
+if os.path.exists(csv_file):
+    try:
+        # 複数の文字コードば試す頑丈な読み込み
+        df = None
+        for enc in ['cp932', 'utf-8', 'utf-8-sig']:
+            try:
+                df = pd.read_csv(csv_file, encoding=enc)
                 break
-        except Exception:
-            continue
-
-    if df is not None:
-        st.success("データの読み込みに成功したバイ！")
+            except:
+                continue
         
-        target_cols = ['第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字']
-        
-        if not set(target_cols).issubset(df.columns):
-            st.error("CSVの列名が合わんばい。")
-            st.write(f"今の列名: {list(df.columns)}")
-        else:
+        if df is not None:
+            st.success("最新データの読み込みに成功したバイ！")
+            
+            # --- 以下、分析と予測のロジック（前と同じ） ---
+            target_cols = ['第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字']
+            
+            # 最新結果の表示
             st.write("最新の抽選結果：")
             st.dataframe(df.head(3))
 
-            # --- 2. 分析機能 ---
+            # 分析
             all_numbers = df[target_cols].values.flatten()
             counts = collections.Counter(all_numbers)
             most_common_data = counts.most_common(43)
@@ -44,34 +41,25 @@ if uploaded_file:
             chart_data = pd.DataFrame(most_common_data, columns=['数字', '出現回数']).set_index('数字')
             st.bar_chart(chart_data)
 
-            # --- 3. 推奨番号の作成 ---
-            st.header("💡 3. 推奨予測番号の作成")
+            # 予測
+            st.header("💡 推奨予測番号")
             budget = st.number_input("予算（円）", min_value=0, step=200, value=1000)
-            num_tickets = budget // 200
-            
-            if st.button("推奨番号ば生成する！"):
-                st.subheader("🎯 せーさんの推奨組み合わせ")
-                # ここで数字ば普通の整数(int)に変換してリストにする
+            if st.button("推奨番号ば生成！"):
                 pool = [int(n[0]) for n in most_common_data]
                 top_selection = pool[:15] if len(pool) >= 15 else pool
-                
-                for i in range(num_tickets):
-                    # 選ばれた数字もスッキリ表示
+                for i in range(budget // 200):
                     selected = sorted(random.sample(top_selection, 6))
                     st.success(f"{i+1}口目： {selected}")
-                st.info("※よく出とる数字の上位15個から選んだバイ！")
 
-            # --- 4. 結果の記録 ---
-            st.header("📝 4. 購入結果の記録")
-            with st.form("result_form"):
-                last_draw = int(df['開催回'].max()) if '開催回' in df.columns else 0
-                target_draw = st.number_input("今回の開催回", value=last_draw + 1)
-                hit_count = st.select_slider("当たった数字の数", options=[0, 1, 2, 3, 4, 5, 6])
-                prize = st.number_input("当選金額", value=0)
-                if st.form_submit_button("結果ば記録する"):
+            # 統計フォーム
+            st.header("📝 結果の記録")
+            with st.form("result"):
+                draw_num = int(df['開催回'].max()) + 1
+                st.write(f"第{draw_num}回の記録")
+                hit = st.slider("当たった数", 0, 6)
+                if st.form_submit_button("記録する"):
                     st.balloons()
-                    st.info(f"第{target_draw}回の結果ば記録したバイ！当たるとよかねぇ！")
-    else:
-        st.error("ファイルがうまく読み込めんばい。")
+    except Exception as e:
+        st.error(f"エラーが出たバイ：{e}")
 else:
-    st.info("まずはCSVば読み込ませてみてね。")
+    st.error("CSVファイルが見つからんばい！GitHubに 'loto6.csv' ば上げたか確認してね。")
